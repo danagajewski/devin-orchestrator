@@ -115,6 +115,10 @@ async def close_issue_for_session(session) -> None:
     # permission).  This prevents sessions from being stuck in
     # "running" on the dashboard.
     session.status = SessionStatus.MERGED
+    session.completed_at = session.completed_at or time.time()
+    session.duration_seconds = round(
+        session.completed_at - session.created_at, 1
+    )
 
     await add_issue_comment(repo, issue_num, comment)
     closed = await close_issue(repo, issue_num)
