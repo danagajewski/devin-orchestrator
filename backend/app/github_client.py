@@ -153,6 +153,22 @@ async def get_pr_check_status(repo: str, pr_number: int) -> dict:
     return {"state": state, "total": total, "passed": passed, "failed": failed}
 
 
+async def get_pr_mergeable(repo: str, pr_number: int) -> dict:
+    """Check whether a PR is mergeable (no conflicts).
+
+    Returns {"mergeable": True|False|None, "mergeable_state": str}.
+    ``mergeable`` is None when GitHub hasn't computed the result yet.
+    """
+    client = _get_client()
+    resp = await client.get(f"/repos/{repo}/pulls/{pr_number}")
+    resp.raise_for_status()
+    data = resp.json()
+    return {
+        "mergeable": data.get("mergeable"),
+        "mergeable_state": data.get("mergeable_state", "unknown"),
+    }
+
+
 async def add_pr_comment(repo: str, pr_number: int, body: str) -> bool:
     """Add a comment to a pull request. Returns True if successful."""
     if not settings.github_token:

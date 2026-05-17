@@ -70,17 +70,26 @@ export default function SessionList({
   }
 
   return (
-    <div className="rounded-md border">
-      <Table>
+    <div>
+      <Table className="table-fixed w-full">
+        <colgroup>
+          <col className="w-[6%]" />
+          <col className="w-[30%]" />
+          <col className="w-[10%]" />
+          <col className="w-[8%]" />
+          <col className="w-[10%]" />
+          <col className="w-[18%]" />
+          <col className="w-[18%]" />
+        </colgroup>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-20">Issue</TableHead>
+            <TableHead>Issue</TableHead>
             <TableHead>Title</TableHead>
-            <TableHead className="w-28">Status</TableHead>
-            <TableHead className="w-24 text-right">ACUs</TableHead>
-            <TableHead className="w-28">Duration</TableHead>
-            <TableHead className="w-20">PR</TableHead>
-            <TableHead className="w-40">Created</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">ACUs</TableHead>
+            <TableHead>Duration</TableHead>
+            <TableHead>PR</TableHead>
+            <TableHead>Created</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

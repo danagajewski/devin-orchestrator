@@ -12,6 +12,7 @@ from app.github_client import (
     add_pr_comment,
     close_issue,
     get_pr_check_status,
+    get_pr_mergeable,
     get_pr_status,
     merge_pr,
     parse_pr_repo_and_number,
@@ -140,6 +141,23 @@ async def _evaluate_merge_strategy(session) -> None:
             if not parsed:
                 continue
             repo, pr_number = parsed
+
+            # Check for merge conflicts before attempting merge
+            try:
+                mergeable = await get_pr_mergeable(repo, pr_number)
+                if mergeable["mergeable"] is False:
+                    session.merge_strategy = MergeStrategy.NEEDS_REVIEW
+                    session.merge_strategy_reason = (
+                        f"PR has merge conflicts (state: {mergeable['mergeable_state']})"
+                    )
+                    await _request_human_review(session, pr, repo, pr_number)
+                    return
+                if mergeable["mergeable"] is None:
+                    session.merge_strategy = MergeStrategy.PENDING
+                    session.merge_strategy_reason = "waiting for GitHub merge check"
+                    return
+            except Exception:
+                logger.debug("Could not check mergeability for PR #%d, proceeding", pr_number)
 
             # Check CI status before merging
             try:
@@ -352,23 +370,27 @@ async def _poll_once() -> None:
                 if session.status == SessionStatus.FAILED:
                     session.error = data.get("status_detail", "Unknown error")
 
-            # If the Devin API already says a PR is merged,
-            # close the issue immediately without waiting for
-            # the separate _check_merges_once cycle.
+            # Evaluate merge strategy when session has PRs and
+            # is in a terminal state (completed/failed/suspended).
+            # This must run BEFORE the issue-closing check so that
+            # auto-merge gets a chance to act on unmerged PRs.
+            if (
+                session.status in TERMINAL_STATUSES
+                and session.pull_requests
+                and not session.issue_closed
+                and not any(pr.merged for pr in session.pull_requests)
+            ):
+                await _evaluate_merge_strategy(session)
+
+            # If the Devin API already says a PR is merged (or
+            # auto-merge just merged it above), close the issue
+            # immediately without waiting for the separate
+            # _check_merges_once cycle.
             if (
                 not session.issue_closed
                 and any(pr.merged for pr in session.pull_requests)
             ):
                 await close_issue_for_session(session)
-
-            # Evaluate merge strategy when session has PRs and
-            # is in a terminal state (completed/failed/suspended)
-            if (
-                session.status in TERMINAL_STATUSES
-                and session.pull_requests
-                and not session.issue_closed
-            ):
-                await _evaluate_merge_strategy(session)
 
             save_session(session)
 
@@ -430,6 +452,14 @@ async def _check_merges_once() -> None:
 
     for session in candidates:
         try:
+            # Evaluate merge strategy for terminal sessions with
+            # unmerged PRs before checking external merges.
+            if (
+                session.status in TERMINAL_STATUSES
+                and not any(pr.merged for pr in session.pull_requests)
+            ):
+                await _evaluate_merge_strategy(session)
+
             merged = await _check_pr_merges(session)
             if merged:
                 await close_issue_for_session(session)
