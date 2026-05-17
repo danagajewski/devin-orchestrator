@@ -109,13 +109,25 @@ async def close_issue_for_session(session) -> None:
         f"The following PR(s) have been merged: {pr_links}\n\n"
         f"*Closed automatically by Devin Orchestrator.*"
     )
+
+    # Always transition to MERGED when we detect a merged PR,
+    # even if we can't close the GitHub issue (e.g. token lacks
+    # permission).  This prevents sessions from being stuck in
+    # "running" on the dashboard.
+    session.status = SessionStatus.MERGED
+
     await add_issue_comment(repo, issue_num, comment)
     closed = await close_issue(repo, issue_num)
     if closed:
         session.issue_closed = True
         session.issue_closed_at = time.time()
-        session.status = SessionStatus.MERGED
         logger.info("Closed issue #%d for session %s", issue_num, session.session_id)
+    else:
+        logger.warning(
+            "Could not close issue #%d for session %s (token may lack permissions)",
+            issue_num,
+            session.session_id,
+        )
 
 
 async def _poll_once() -> None:
