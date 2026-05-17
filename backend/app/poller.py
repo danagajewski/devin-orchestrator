@@ -371,15 +371,26 @@ async def _poll_once() -> None:
                     session.error = data.get("status_detail", "Unknown error")
 
             # Evaluate merge strategy when session has PRs and
-            # is in a terminal state (completed/failed/suspended).
+            # is in a terminal state OR is waiting for user input
+            # (Devin finished its work and is asking for approval).
             # This must run BEFORE the issue-closing check so that
             # auto-merge gets a chance to act on unmerged PRs.
-            if (
+            ready_for_merge = (
                 session.status in TERMINAL_STATUSES
+                or session.status_detail == "waiting_for_user"
+            )
+            if (
+                ready_for_merge
                 and session.pull_requests
                 and not session.issue_closed
                 and not any(pr.merged for pr in session.pull_requests)
             ):
+                logger.info(
+                    "Evaluating merge strategy for session %s (status=%s, detail=%s)",
+                    session.session_id,
+                    session.status,
+                    session.status_detail,
+                )
                 await _evaluate_merge_strategy(session)
 
             # If the Devin API already says a PR is merged (or
@@ -452,10 +463,15 @@ async def _check_merges_once() -> None:
 
     for session in candidates:
         try:
-            # Evaluate merge strategy for terminal sessions with
-            # unmerged PRs before checking external merges.
-            if (
+            # Evaluate merge strategy for terminal or waiting
+            # sessions with unmerged PRs before checking external
+            # merges.
+            ready = (
                 session.status in TERMINAL_STATUSES
+                or session.status_detail == "waiting_for_user"
+            )
+            if (
+                ready
                 and not any(pr.merged for pr in session.pull_requests)
             ):
                 await _evaluate_merge_strategy(session)

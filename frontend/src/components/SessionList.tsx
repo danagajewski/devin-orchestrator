@@ -23,7 +23,22 @@ const STATUS_STYLES: Record<string, string> = {
   failed: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
   suspended: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
   merged: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+  review_requested: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200",
+  auto_merged: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
 };
+
+function displayStatus(session: OrchestratedSession): { label: string; styleKey: string } {
+  if (session.merge_strategy === "auto_merged") {
+    return { label: "auto-merged", styleKey: "auto_merged" };
+  }
+  if (
+    session.merge_strategy === "review_requested" ||
+    session.merge_strategy === "needs_review"
+  ) {
+    return { label: "review requested", styleKey: "review_requested" };
+  }
+  return { label: session.status, styleKey: session.status };
+}
 
 function formatTime(ts: number): string {
   return new Date(ts * 1000).toLocaleString();
@@ -140,12 +155,17 @@ export default function SessionList({
                 )}
               </TableCell>
               <TableCell>
-                <Badge className={STATUS_STYLES[session.status] || ""}>
-                  {session.status === "running" && (
-                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                  )}
-                  {session.status}
-                </Badge>
+                {(() => {
+                  const { label, styleKey } = displayStatus(session);
+                  return (
+                    <Badge className={STATUS_STYLES[styleKey] || ""}>
+                      {session.status === "running" && styleKey === "running" && (
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      )}
+                      {label}
+                    </Badge>
+                  );
+                })()}
                 {session.error && (
                   <p className="text-xs text-red-500 mt-1 truncate max-w-28" title={session.error}>
                     {session.error}
