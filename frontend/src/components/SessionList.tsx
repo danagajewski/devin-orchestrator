@@ -152,29 +152,37 @@ export default function SessionList({
               <TableCell>
                 {session.pull_requests.length > 0 ? (
                   <div className="flex flex-col gap-1">
-                    {session.pull_requests.map((pr, i) => (
-                      <a
-                        key={i}
-                        href={pr.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`inline-flex items-center gap-1 ${
-                          pr.merged
-                            ? "text-purple-600 hover:text-purple-700"
-                            : "text-green-600 hover:text-green-700"
-                        }`}
-                      >
-                        {pr.merged ? (
-                          <GitMerge className="h-3 w-3" />
-                        ) : (
-                          <GitPullRequest className="h-3 w-3" />
-                        )}
-                        <span className="text-xs">
-                          {pr.number ? `#${pr.number}` : "PR"}
-                          {pr.merged && " merged"}
-                        </span>
-                      </a>
-                    ))}
+                    {session.pull_requests.map((pr, i) => {
+                      const prUrl =
+                        pr.url && pr.url.startsWith("http")
+                          ? pr.url
+                          : pr.number
+                            ? `https://github.com/${session.github_issue_url.split("github.com/")[1]?.split("/issues")[0] || ""}/pull/${pr.number}`
+                            : session.devin_url;
+                      return (
+                        <a
+                          key={i}
+                          href={prUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center gap-1 ${
+                            pr.merged
+                              ? "text-purple-600 hover:text-purple-700"
+                              : "text-green-600 hover:text-green-700"
+                          }`}
+                        >
+                          {pr.merged ? (
+                            <GitMerge className="h-3 w-3" />
+                          ) : (
+                            <GitPullRequest className="h-3 w-3" />
+                          )}
+                          <span className="text-xs">
+                            {pr.number ? `#${pr.number}` : "PR"}
+                            {pr.merged && " merged"}
+                          </span>
+                        </a>
+                      );
+                    })}
                   </div>
                 ) : (
                   <span className="text-muted-foreground text-xs">—</span>
