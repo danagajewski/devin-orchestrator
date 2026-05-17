@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     poll_interval_seconds: int = 30
     data_file_path: str = "data.json"
     devin_api_base_url: str = "https://api.devin.ai/v3"
+    auto_merge_enabled: bool = True
+    auto_merge_max_size: str = "s"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

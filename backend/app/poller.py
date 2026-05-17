@@ -9,11 +9,14 @@ from app.devin_client import get_session as devin_get_session
 from app.devin_client import get_session_insights
 from app.github_client import (
     add_issue_comment,
+    add_pr_comment,
     close_issue,
+    get_pr_check_status,
     get_pr_status,
+    merge_pr,
     parse_pr_repo_and_number,
 )
-from app.models import PullRequestInfo, SessionStatus
+from app.models import MergeStrategy, PullRequestInfo, SessionStatus
 from app.storage import get_active_sessions, get_all_sessions, save_session
 
 
@@ -75,6 +78,7 @@ _SIZE_MULTIPLIERS: dict[str, float] = {
     "l": 2.0,
     "xl": 2.5,
 }
+_SIZE_ORDER = ["xs", "s", "m", "l", "xl"]
 _BASE_ACUS_PER_MESSAGE = 0.22
 
 
@@ -87,6 +91,130 @@ def _estimate_acus(
         return None
     multiplier = _SIZE_MULTIPLIERS.get(session_size or "xs", 1.0)
     return round(num_devin_messages * _BASE_ACUS_PER_MESSAGE * multiplier, 2)
+
+
+def _should_auto_merge(session) -> tuple[bool, str]:
+    """Decide whether a session's PR should be auto-merged.
+
+    Returns (should_merge, reason).
+    """
+    if not settings.auto_merge_enabled:
+        return False, "auto-merge disabled in config"
+
+    if session.status == SessionStatus.FAILED:
+        return False, "session failed"
+
+    if session.status == SessionStatus.SUSPENDED:
+        return False, "session was suspended"
+
+    max_size = settings.auto_merge_max_size
+    session_size = session.session_size or "xs"
+    max_idx = _SIZE_ORDER.index(max_size) if max_size in _SIZE_ORDER else 1
+    cur_idx = _SIZE_ORDER.index(session_size) if session_size in _SIZE_ORDER else 0
+    if cur_idx > max_idx:
+        return False, f"session size '{session_size}' exceeds max '{max_size}'"
+
+    return True, "session completed successfully within size threshold"
+
+
+async def _evaluate_merge_strategy(session) -> None:
+    """Evaluate and execute merge strategy for a completed session with PRs."""
+    if session.merge_strategy in (
+        MergeStrategy.AUTO_MERGED,
+        MergeStrategy.REVIEW_REQUESTED,
+    ):
+        return
+
+    if not session.pull_requests:
+        return
+
+    should_merge, reason = _should_auto_merge(session)
+    session.merge_strategy_reason = reason
+
+    if should_merge:
+        session.merge_strategy = MergeStrategy.AUTO_MERGE
+        for pr in session.pull_requests:
+            if pr.merged:
+                continue
+            parsed = parse_pr_repo_and_number(pr.url)
+            if not parsed:
+                continue
+            repo, pr_number = parsed
+
+            # Check CI status before merging
+            try:
+                ci_status = await get_pr_check_status(repo, pr_number)
+                if ci_status["state"] == "failure":
+                    session.merge_strategy = MergeStrategy.NEEDS_REVIEW
+                    session.merge_strategy_reason = (
+                        f"CI checks failed ({ci_status['failed']}/{ci_status['total']})"
+                    )
+                    await _request_human_review(session, pr, repo, pr_number)
+                    return
+                if ci_status["state"] == "pending":
+                    # CI still running, skip for now — will re-evaluate next cycle
+                    session.merge_strategy = MergeStrategy.PENDING
+                    session.merge_strategy_reason = "waiting for CI checks"
+                    return
+            except Exception:
+                logger.debug("Could not check CI for PR #%d, proceeding", pr_number)
+
+            # Attempt auto-merge
+            merged = await merge_pr(repo, pr_number)
+            if merged:
+                pr.merged = True
+                session.merge_strategy = MergeStrategy.AUTO_MERGED
+                session.merge_strategy_reason = reason
+                logger.info(
+                    "Auto-merged PR #%d for session %s (issue #%d): %s",
+                    pr_number,
+                    session.session_id,
+                    session.github_issue_number,
+                    reason,
+                )
+                await close_issue_for_session(session)
+            else:
+                session.merge_strategy = MergeStrategy.NEEDS_REVIEW
+                session.merge_strategy_reason = "auto-merge failed (may need permissions)"
+                await _request_human_review(session, pr, repo, pr_number)
+    else:
+        session.merge_strategy = MergeStrategy.NEEDS_REVIEW
+        await _request_human_review_all(session, reason)
+
+    save_session(session)
+
+
+async def _request_human_review(
+    session, pr: PullRequestInfo, repo: str, pr_number: int
+) -> None:
+    """Leave a comment on the PR requesting human review."""
+    comment = (
+        f"**Review requested by Devin Orchestrator**\n\n"
+        f"This PR was created by Devin to resolve issue "
+        f"#{session.github_issue_number}. "
+        f"Reason for review: {session.merge_strategy_reason}\n\n"
+        f"Please review and merge manually when ready."
+    )
+    await add_pr_comment(repo, pr_number, comment)
+    session.merge_strategy = MergeStrategy.REVIEW_REQUESTED
+    logger.info(
+        "Requested human review for PR #%d (session %s): %s",
+        pr_number,
+        session.session_id,
+        session.merge_strategy_reason,
+    )
+
+
+async def _request_human_review_all(session, reason: str) -> None:
+    """Request human review for all PRs on a session."""
+    for pr in session.pull_requests:
+        if pr.merged:
+            continue
+        parsed = parse_pr_repo_and_number(pr.url)
+        if not parsed:
+            continue
+        repo, pr_number = parsed
+        await _request_human_review(session, pr, repo, pr_number)
 
 
 async def _check_pr_merges(session) -> bool:
@@ -232,6 +360,15 @@ async def _poll_once() -> None:
                 and any(pr.merged for pr in session.pull_requests)
             ):
                 await close_issue_for_session(session)
+
+            # Evaluate merge strategy when session has PRs and
+            # is in a terminal state (completed/failed/suspended)
+            if (
+                session.status in TERMINAL_STATUSES
+                and session.pull_requests
+                and not session.issue_closed
+            ):
+                await _evaluate_merge_strategy(session)
 
             save_session(session)
 

@@ -1,9 +1,11 @@
 import {
   CheckCircle2,
   CircleDot,
+  Eye,
   GitMerge,
   GitPullRequest,
   XCircle,
+  Zap,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { OrchestratedSession } from "@/lib/api";
@@ -78,6 +80,24 @@ function buildFeedItems(sessions: OrchestratedSession[]): FeedItem[] {
           url: pr.url,
         });
       }
+    }
+
+    if (s.merge_strategy === "auto_merged") {
+      items.push({
+        id: `${s.session_id}-auto-merged`,
+        time: s.issue_closed_at || s.completed_at || s.created_at,
+        icon: <Zap className="h-4 w-4 text-emerald-500" />,
+        message: `PR auto-merged for issue #${s.github_issue_number}`,
+        url: s.pull_requests[0]?.url || s.devin_url,
+      });
+    } else if (s.merge_strategy === "review_requested") {
+      items.push({
+        id: `${s.session_id}-review-requested`,
+        time: s.completed_at || s.created_at,
+        icon: <Eye className="h-4 w-4 text-amber-500" />,
+        message: `Human review requested for issue #${s.github_issue_number}`,
+        url: s.pull_requests[0]?.url || s.devin_url,
+      });
     }
 
     if (s.issue_closed && s.issue_closed_at) {
