@@ -75,7 +75,9 @@ def compute_metrics() -> MetricsResponse:
         return MetricsResponse()
 
     active = sum(1 for s in sessions if s.status in (SessionStatus.PENDING, SessionStatus.RUNNING))
-    completed = sum(1 for s in sessions if s.status == SessionStatus.COMPLETED)
+    completed = sum(
+        1 for s in sessions if s.status in (SessionStatus.COMPLETED, SessionStatus.MERGED)
+    )
     failed = sum(1 for s in sessions if s.status == SessionStatus.FAILED)
     total_acus = sum(s.acus_consumed for s in sessions)
 

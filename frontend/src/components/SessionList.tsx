@@ -1,4 +1,4 @@
-import { ExternalLink, GitPullRequest, Loader2 } from "lucide-react";
+import { CheckCircle2, ExternalLink, GitMerge, GitPullRequest, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -22,6 +22,7 @@ const STATUS_STYLES: Record<string, string> = {
   completed: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
   failed: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
   suspended: "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200",
+  merged: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
 };
 
 function formatTime(ts: number): string {
@@ -157,17 +158,32 @@ export default function SessionList({
                         href={pr.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-green-600 hover:text-green-700 inline-flex items-center gap-1"
+                        className={`inline-flex items-center gap-1 ${
+                          pr.merged
+                            ? "text-purple-600 hover:text-purple-700"
+                            : "text-green-600 hover:text-green-700"
+                        }`}
                       >
-                        <GitPullRequest className="h-3 w-3" />
+                        {pr.merged ? (
+                          <GitMerge className="h-3 w-3" />
+                        ) : (
+                          <GitPullRequest className="h-3 w-3" />
+                        )}
                         <span className="text-xs">
                           {pr.number ? `#${pr.number}` : "PR"}
+                          {pr.merged && " merged"}
                         </span>
                       </a>
                     ))}
                   </div>
                 ) : (
                   <span className="text-muted-foreground text-xs">—</span>
+                )}
+                {session.issue_closed && (
+                  <div className="flex items-center gap-1 mt-1 text-emerald-600">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span className="text-xs">Issue closed</span>
+                  </div>
                 )}
               </TableCell>
               <TableCell className="text-xs text-muted-foreground">

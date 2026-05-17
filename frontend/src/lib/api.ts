@@ -4,6 +4,8 @@ export interface PullRequestInfo {
   url: string;
   title: string | null;
   number: number | null;
+  merged: boolean;
+  merged_at: string | null;
 }
 
 export interface OrchestratedSession {
@@ -13,7 +15,7 @@ export interface OrchestratedSession {
   github_issue_title: string;
   github_issue_url: string;
   github_issue_labels: string[];
-  status: "pending" | "running" | "completed" | "failed" | "suspended";
+  status: "pending" | "running" | "completed" | "failed" | "suspended" | "merged";
   status_detail: string | null;
   acus_consumed: number;
   created_at: number;
@@ -21,6 +23,8 @@ export interface OrchestratedSession {
   duration_seconds: number | null;
   pull_requests: PullRequestInfo[];
   error: string | null;
+  issue_closed: boolean;
+  issue_closed_at: number | null;
 }
 
 export interface Metrics {

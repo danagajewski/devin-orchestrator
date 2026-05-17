@@ -10,7 +10,8 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from app.config import settings
 from app.devin_client import create_session
 from app.models import OrchestratedSession, PullRequestInfo, SessionStatus
-from app.storage import save_session
+from app.poller import close_issue_for_session
+from app.storage import get_all_sessions, save_session
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -65,6 +66,9 @@ async def github_webhook(
 
     if not _verify_signature(body, x_hub_signature_256):
         raise HTTPException(status_code=401, detail="Invalid signature")
+
+    if x_github_event == "pull_request":
+        return await _handle_pull_request_event(body, request)
 
     if x_github_event != "issues":
         return {"status": "ignored", "reason": f"Event type '{x_github_event}' not handled"}
@@ -133,3 +137,48 @@ async def github_webhook(
     except Exception:
         logger.exception("Failed to create Devin session for issue #%d", issue_number)
         raise HTTPException(status_code=500, detail="Failed to create Devin session")
+
+
+async def _handle_pull_request_event(raw_body: bytes, request: Request) -> dict:
+    """Handle pull_request webhook events to detect merges."""
+    payload = await request.json()
+    action = payload.get("action")
+    pr_data = payload.get("pull_request", {})
+    merged = pr_data.get("merged", False)
+
+    if action != "closed" or not merged:
+        reason = f"PR action '{action}' (merged={merged}) not handled"
+        return {"status": "ignored", "reason": reason}
+
+    pr_number = pr_data.get("number")
+    pr_url = pr_data.get("html_url", "")
+    merged_at = pr_data.get("merged_at")
+
+    logger.info("PR #%d merged, checking for matching sessions", pr_number)
+
+    sessions = get_all_sessions()
+    matched = False
+
+    for session in sessions:
+        if session.issue_closed:
+            continue
+        for pr in session.pull_requests:
+            if pr.number == pr_number or pr.url == pr_url:
+                pr.merged = True
+                pr.merged_at = merged_at
+                matched = True
+                logger.info(
+                    "Matched merged PR #%d to session %s (issue #%d)",
+                    pr_number,
+                    session.session_id,
+                    session.github_issue_number,
+                )
+                await close_issue_for_session(session)
+                save_session(session)
+                break
+
+    if not matched:
+        logger.debug("Merged PR #%d did not match any tracked session", pr_number)
+        return {"status": "ignored", "reason": "PR not linked to any tracked session"}
+
+    return {"status": "issue_closed", "pr_number": pr_number}

@@ -1,6 +1,7 @@
 import {
   CheckCircle2,
   CircleDot,
+  GitMerge,
   GitPullRequest,
   XCircle,
 } from "lucide-react";
@@ -66,6 +67,26 @@ function buildFeedItems(sessions: OrchestratedSession[]): FeedItem[] {
         icon: <GitPullRequest className="h-4 w-4 text-purple-500" />,
         message: `PR ${pr.number ? `#${pr.number}` : ""} opened for issue #${s.github_issue_number}`,
         url: pr.url,
+      });
+
+      if (pr.merged) {
+        items.push({
+          id: `${s.session_id}-merged-${pr.number || 0}`,
+          time: s.issue_closed_at || s.completed_at || s.created_at,
+          icon: <GitMerge className="h-4 w-4 text-purple-600" />,
+          message: `PR ${pr.number ? `#${pr.number}` : ""} merged for issue #${s.github_issue_number}`,
+          url: pr.url,
+        });
+      }
+    }
+
+    if (s.issue_closed && s.issue_closed_at) {
+      items.push({
+        id: `${s.session_id}-issue-closed`,
+        time: s.issue_closed_at,
+        icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
+        message: `Issue #${s.github_issue_number} closed (resolved)`,
+        url: s.github_issue_url,
       });
     }
   }

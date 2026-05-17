@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.devin_client import close_client
+from app.github_client import close_github_client
 from app.models import HealthResponse, MetricsResponse, OrchestratedSession
 from app.poller import start_polling, stop_polling
 from app.storage import compute_metrics, get_all_sessions, get_session
@@ -27,6 +28,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down Devin Orchestrator")
     stop_polling()
     await close_client()
+    await close_github_client()
 
 
 app = FastAPI(

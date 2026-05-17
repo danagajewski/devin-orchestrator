@@ -12,12 +12,15 @@ class SessionStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     SUSPENDED = "suspended"
+    MERGED = "merged"
 
 
 class PullRequestInfo(BaseModel):
     url: str
     title: str | None = None
     number: int | None = None
+    merged: bool = False
+    merged_at: str | None = None
 
 
 class OrchestratedSession(BaseModel):
@@ -35,6 +38,8 @@ class OrchestratedSession(BaseModel):
     duration_seconds: float | None = None
     pull_requests: list[PullRequestInfo] = Field(default_factory=list)
     error: str | None = None
+    issue_closed: bool = False
+    issue_closed_at: float | None = None
 
 
 class MetricsResponse(BaseModel):
