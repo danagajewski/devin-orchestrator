@@ -95,6 +95,8 @@ async def _poll_once() -> None:
     logger.debug("Polling %d active sessions", len(active))
 
     for session in active:
+        if session.status == SessionStatus.MERGED:
+            continue
         try:
             data = await devin_get_session(session.session_id)
             devin_status = data.get("status", "running")
@@ -135,12 +137,17 @@ async def _poll_once() -> None:
 
 
 async def _check_merges_once() -> None:
-    """Check for PR merges on completed sessions that haven't had their issues closed."""
+    """Check for PR merges on sessions that have PRs but haven't had their issues closed."""
     all_sessions = get_all_sessions()
     candidates = [
         s
         for s in all_sessions
-        if s.status in (SessionStatus.COMPLETED, SessionStatus.SUSPENDED)
+        if s.status
+        in (
+            SessionStatus.RUNNING,
+            SessionStatus.COMPLETED,
+            SessionStatus.SUSPENDED,
+        )
         and s.pull_requests
         and not s.issue_closed
     ]
