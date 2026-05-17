@@ -6,6 +6,7 @@ import time
 
 from app.config import settings
 from app.devin_client import get_session as devin_get_session
+from app.devin_client import get_session_insights
 from app.github_client import (
     add_issue_comment,
     close_issue,
@@ -61,6 +62,31 @@ DEVIN_STATUS_MAP: dict[str, SessionStatus] = {
 TERMINAL_STATUSES = {SessionStatus.COMPLETED, SessionStatus.FAILED, SessionStatus.SUSPENDED}
 
 _polling_task: asyncio.Task | None = None
+
+# ACU estimation based on session size and message count.
+# Calibrated from observed data: an "xs" session with 3 Devin
+# messages consumed ~0.67 ACUs.  The size multiplier accounts
+# for the fact that larger sessions involve heavier compute
+# per message (bigger diffs, more tool calls, etc.).
+_SIZE_MULTIPLIERS: dict[str, float] = {
+    "xs": 1.0,
+    "s": 1.3,
+    "m": 1.6,
+    "l": 2.0,
+    "xl": 2.5,
+}
+_BASE_ACUS_PER_MESSAGE = 0.22
+
+
+def _estimate_acus(
+    num_devin_messages: int | None,
+    session_size: str | None,
+) -> float | None:
+    """Estimate ACU consumption from insights metrics."""
+    if num_devin_messages is None or num_devin_messages == 0:
+        return None
+    multiplier = _SIZE_MULTIPLIERS.get(session_size or "xs", 1.0)
+    return round(num_devin_messages * _BASE_ACUS_PER_MESSAGE * multiplier, 2)
 
 
 async def _check_pr_merges(session) -> bool:
@@ -150,6 +176,17 @@ async def _poll_once() -> None:
             session.status = DEVIN_STATUS_MAP.get(devin_status, SessionStatus.RUNNING)
             session.status_detail = data.get("status_detail")
             session.acus_consumed = data.get("acus_consumed", session.acus_consumed)
+
+            # Fetch insights for message counts and session size
+            insights = await get_session_insights(session.session_id)
+            if insights:
+                session.num_user_messages = insights.get("num_user_messages")
+                session.num_devin_messages = insights.get("num_devin_messages")
+                session.session_size = insights.get("session_size")
+                session.estimated_acus = _estimate_acus(
+                    session.num_devin_messages,
+                    session.session_size,
+                )
 
             prs = data.get("pull_requests", [])
             if prs:
