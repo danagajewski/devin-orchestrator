@@ -15,6 +15,37 @@ from app.github_client import (
 from app.models import PullRequestInfo, SessionStatus
 from app.storage import get_active_sessions, get_all_sessions, save_session
 
+
+def _parse_devin_pr(pr_data: dict) -> PullRequestInfo:
+    """Map a PR dict from the Devin API to a PullRequestInfo.
+
+    The Devin API uses ``pr_url`` and ``pr_state`` rather than
+    ``url`` / ``title`` / ``number``.  We extract the PR number
+    from the URL and also honour the legacy field names so that
+    both formats work.
+    """
+    url = pr_data.get("pr_url") or pr_data.get("url", "")
+    title = pr_data.get("title")
+    number = pr_data.get("number")
+
+    # Extract PR number from URL when not provided directly
+    if not number and url:
+        parsed = parse_pr_repo_and_number(url)
+        if parsed:
+            number = parsed[1]
+
+    # Detect already-merged state from API response
+    pr_state = pr_data.get("pr_state", "")
+    merged = pr_state == "merged"
+
+    return PullRequestInfo(
+        url=url,
+        title=title,
+        number=number,
+        merged=merged,
+        merged_at=pr_data.get("merged_at"),
+    )
+
 logger = logging.getLogger(__name__)
 
 DEVIN_STATUS_MAP: dict[str, SessionStatus] = {
@@ -106,21 +137,31 @@ async def _poll_once() -> None:
 
             prs = data.get("pull_requests", [])
             if prs:
-                existing_prs = {pr.url: pr for pr in session.pull_requests}
-                session.pull_requests = [
-                    PullRequestInfo(
-                        url=pr.get("url", ""),
-                        title=pr.get("title"),
-                        number=pr.get("number"),
-                        merged=existing_prs.get(
-                            pr.get("url", ""), PullRequestInfo(url="")
-                        ).merged,
-                        merged_at=existing_prs.get(
-                            pr.get("url", ""), PullRequestInfo(url="")
-                        ).merged_at,
+                # Build lookup of previously-stored PRs so we
+                # preserve merge info detected via webhook/polling
+                existing_by_url: dict[str, PullRequestInfo] = {
+                    pr.url: pr for pr in session.pull_requests if pr.url
+                }
+                existing_by_num: dict[int, PullRequestInfo] = {
+                    pr.number: pr
+                    for pr in session.pull_requests
+                    if pr.number
+                }
+
+                new_prs: list[PullRequestInfo] = []
+                for pr_raw in prs:
+                    info = _parse_devin_pr(pr_raw)
+                    # Preserve merge state from earlier detection
+                    prev = existing_by_url.get(info.url) or (
+                        existing_by_num.get(info.number)
+                        if info.number
+                        else None
                     )
-                    for pr in prs
-                ]
+                    if prev and prev.merged:
+                        info.merged = True
+                        info.merged_at = info.merged_at or prev.merged_at
+                    new_prs.append(info)
+                session.pull_requests = new_prs
 
             if session.status in TERMINAL_STATUSES:
                 session.completed_at = session.completed_at or time.time()
@@ -129,6 +170,15 @@ async def _poll_once() -> None:
                 )
                 if session.status == SessionStatus.FAILED:
                     session.error = data.get("status_detail", "Unknown error")
+
+            # If the Devin API already says a PR is merged,
+            # close the issue immediately without waiting for
+            # the separate _check_merges_once cycle.
+            if (
+                not session.issue_closed
+                and any(pr.merged for pr in session.pull_requests)
+            ):
+                await close_issue_for_session(session)
 
             save_session(session)
 
