@@ -1,4 +1,4 @@
-import { CheckCircle2, ExternalLink, GitMerge, GitPullRequest, Loader2 } from "lucide-react";
+import { CheckCircle2, ExternalLink, Eye, GitMerge, GitPullRequest, Loader2, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -186,6 +186,33 @@ export default function SessionList({
                   </div>
                 ) : (
                   <span className="text-muted-foreground text-xs">—</span>
+                )}
+                {session.merge_strategy && (
+                  <div
+                    className={`flex items-center gap-1 mt-1 ${
+                      session.merge_strategy === "auto_merged"
+                        ? "text-emerald-600"
+                        : session.merge_strategy === "review_requested" || session.merge_strategy === "needs_review"
+                          ? "text-amber-600"
+                          : "text-muted-foreground"
+                    }`}
+                    title={session.merge_strategy_reason || undefined}
+                  >
+                    {session.merge_strategy === "auto_merged" ? (
+                      <Zap className="h-3 w-3" />
+                    ) : (
+                      <Eye className="h-3 w-3" />
+                    )}
+                    <span className="text-xs">
+                      {session.merge_strategy === "auto_merged"
+                        ? "Auto-merged"
+                        : session.merge_strategy === "review_requested"
+                          ? "Review requested"
+                          : session.merge_strategy === "pending"
+                            ? "CI pending"
+                            : "Needs review"}
+                    </span>
+                  </div>
                 )}
                 {session.issue_closed && (
                   <div className="flex items-center gap-1 mt-1 text-emerald-600">

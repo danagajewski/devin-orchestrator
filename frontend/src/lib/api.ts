@@ -27,6 +27,8 @@ export interface OrchestratedSession {
   duration_seconds: number | null;
   pull_requests: PullRequestInfo[];
   error: string | null;
+  merge_strategy: string | null;
+  merge_strategy_reason: string | null;
   issue_closed: boolean;
   issue_closed_at: number | null;
 }

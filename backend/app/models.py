@@ -15,6 +15,14 @@ class SessionStatus(str, Enum):
     MERGED = "merged"
 
 
+class MergeStrategy(str, Enum):
+    PENDING = "pending"
+    AUTO_MERGE = "auto_merge"
+    NEEDS_REVIEW = "needs_review"
+    AUTO_MERGED = "auto_merged"
+    REVIEW_REQUESTED = "review_requested"
+
+
 class PullRequestInfo(BaseModel):
     url: str
     title: str | None = None
@@ -42,6 +50,8 @@ class OrchestratedSession(BaseModel):
     duration_seconds: float | None = None
     pull_requests: list[PullRequestInfo] = Field(default_factory=list)
     error: str | None = None
+    merge_strategy: str | None = None
+    merge_strategy_reason: str | None = None
     issue_closed: bool = False
     issue_closed_at: float | None = None
 

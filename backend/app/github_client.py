@@ -84,6 +84,87 @@ async def add_issue_comment(repo: str, issue_number: int, body: str) -> bool:
     return response.status_code == 201
 
 
+async def merge_pr(repo: str, pr_number: int) -> bool:
+    """Merge a pull request. Returns True if successful."""
+    if not settings.github_token:
+        logger.warning("No GITHUB_TOKEN configured, cannot merge PR #%d", pr_number)
+        return False
+    client = _get_client()
+    response = await client.put(
+        f"/repos/{repo}/pulls/{pr_number}/merge",
+        json={"merge_method": "squash"},
+    )
+    if response.status_code == 200:
+        logger.info("Auto-merged PR #%d on %s", pr_number, repo)
+        return True
+    logger.warning(
+        "Failed to merge PR #%d on %s: %d %s",
+        pr_number,
+        repo,
+        response.status_code,
+        response.text,
+    )
+    return False
+
+
+async def get_pr_check_status(repo: str, pr_number: int) -> dict:
+    """Get the combined CI check status for a PR's head commit.
+
+    Returns {"state": "success"|"failure"|"pending"|"no_checks",
+             "total": int, "passed": int, "failed": int}.
+    """
+    client = _get_client()
+    # First get the PR to find the head SHA
+    pr_resp = await client.get(f"/repos/{repo}/pulls/{pr_number}")
+    pr_resp.raise_for_status()
+    head_sha = pr_resp.json().get("head", {}).get("sha", "")
+    if not head_sha:
+        return {"state": "no_checks", "total": 0, "passed": 0, "failed": 0}
+
+    # Get combined status
+    status_resp = await client.get(f"/repos/{repo}/commits/{head_sha}/status")
+    status_resp.raise_for_status()
+    status_data = status_resp.json()
+
+    # Also check GitHub Actions check runs
+    checks_resp = await client.get(f"/repos/{repo}/commits/{head_sha}/check-runs")
+    checks_resp.raise_for_status()
+    checks_data = checks_resp.json()
+    check_runs = checks_data.get("check_runs", [])
+
+    statuses = status_data.get("statuses", [])
+    total = len(statuses) + len(check_runs)
+    if total == 0:
+        return {"state": "no_checks", "total": 0, "passed": 0, "failed": 0}
+
+    passed = sum(1 for s in statuses if s.get("state") == "success")
+    passed += sum(1 for c in check_runs if c.get("conclusion") == "success")
+    failed = sum(1 for s in statuses if s.get("state") == "failure")
+    failed += sum(1 for c in check_runs if c.get("conclusion") == "failure")
+    pending = total - passed - failed
+
+    if failed > 0:
+        state = "failure"
+    elif pending > 0:
+        state = "pending"
+    else:
+        state = "success"
+
+    return {"state": state, "total": total, "passed": passed, "failed": failed}
+
+
+async def add_pr_comment(repo: str, pr_number: int, body: str) -> bool:
+    """Add a comment to a pull request. Returns True if successful."""
+    if not settings.github_token:
+        return False
+    client = _get_client()
+    response = await client.post(
+        f"/repos/{repo}/issues/{pr_number}/comments",
+        json={"body": body},
+    )
+    return response.status_code == 201
+
+
 async def close_github_client() -> None:
     global _client
     if _client and not _client.is_closed:
