@@ -75,14 +75,31 @@ docker compose up --build
 - **Backend API**: http://localhost:8000
 - **API docs**: http://localhost:8000/docs
 
-### 3. Set up GitHub Webhook
+### 3. Expose your machine with ngrok
+
+GitHub webhooks need a public URL to reach your machine. The orchestrator includes an ngrok tunnel as an optional Docker service.
+
+1. Sign up at [ngrok.com](https://ngrok.com) and copy your auth token from the [dashboard](https://dashboard.ngrok.com/get-started/your-authtoken)
+2. Add it to your `.env`:
+   ```env
+   NGROK_AUTHTOKEN=your_token_here
+   ```
+3. Start the orchestrator with the tunnel:
+   ```bash
+   docker compose --profile tunnel up --build
+   ```
+4. Open http://localhost:4040 to see your ngrok dashboard — copy the public URL (e.g. `https://abc123.ngrok-free.app`)
+
+### 4. Set up GitHub Webhook
 
 1. Go to your target repo → **Settings** → **Webhooks** → **Add webhook**
-2. **Payload URL**: `https://your-server:3000/webhook/github` (the nginx proxy forwards to the backend)
+2. **Payload URL**: `https://abc123.ngrok-free.app/webhook/github` (use your ngrok URL from step 3)
 3. **Content type**: `application/json`
 4. **Secret**: Same value as `GITHUB_WEBHOOK_SECRET` in your `.env`
-5. **Events**: Select **Issues** only
+5. **Events**: Select "Let me select individual events" → check **Issues** only
 6. Click **Add webhook**
+
+> **Note:** The free ngrok plan gives you a new URL each time you restart. Update the webhook URL in GitHub if you restart the containers. For a stable URL, use an [ngrok reserved domain](https://dashboard.ngrok.com/domains) (free plan includes one).
 
 ## Local Development
 
@@ -168,3 +185,4 @@ devin-orchestrator/
 | `GITHUB_WEBHOOK_SECRET` | Yes | — | Secret for webhook signature validation |
 | `TARGET_REPO` | No | `danagajewski/superset` | Repository for Devin sessions |
 | `POLL_INTERVAL_SECONDS` | No | `30` | Session status polling interval |
+| `NGROK_AUTHTOKEN` | For tunnel | — | ngrok auth token ([get one here](https://dashboard.ngrok.com/get-started/your-authtoken)) |
