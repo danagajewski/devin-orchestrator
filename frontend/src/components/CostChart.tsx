@@ -21,7 +21,16 @@ const STATUS_COLORS: Record<string, string> = {
   pending: "#eab308",
   failed: "#ef4444",
   suspended: "#6b7280",
+  merged: "#a855f7",
 };
+
+function formatMinutes(mins: number): string {
+  if (mins < 1) return "<1m";
+  if (mins < 60) return `${Math.round(mins)}m`;
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return `${h}h ${m}m`;
+}
 
 export default function CostChart({ sessions }: CostChartProps) {
   if (sessions.length === 0) {
@@ -29,7 +38,7 @@ export default function CostChart({ sessions }: CostChartProps) {
       <Card>
         <CardHeader>
           <CardTitle className="text-sm font-medium">
-            ACU Cost per Session
+            Session Duration (last 20)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -41,20 +50,28 @@ export default function CostChart({ sessions }: CostChartProps) {
     );
   }
 
+  const hasAcus = sessions.some((s) => s.acus_consumed > 0);
+
   const data = sessions
     .slice(0, 20)
     .reverse()
     .map((s) => ({
       name: `#${s.github_issue_number}`,
-      acus: Number(s.acus_consumed.toFixed(2)),
+      value: hasAcus
+        ? Number(s.acus_consumed.toFixed(2))
+        : Number(((s.duration_seconds ?? 0) / 60).toFixed(1)),
       status: s.status,
+      durationSeconds: s.duration_seconds,
     }));
+
+  const label = hasAcus ? "ACU Cost" : "Duration";
+  const unit = hasAcus ? "ACUs" : "min";
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-sm font-medium">
-          ACU Cost per Session (last 20)
+          {hasAcus ? "ACU Cost" : "Session Duration"} per Session (last 20)
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -80,9 +97,13 @@ export default function CostChart({ sessions }: CostChartProps) {
                 borderRadius: "8px",
                 fontSize: "12px",
               }}
-              formatter={(value: number) => [`${value} ACUs`, "Cost"]}
+              formatter={(value: number, _name: string, props: { payload?: { durationSeconds?: number | null } }) => {
+                if (hasAcus) return [`${value} ACUs`, "Cost"];
+                const secs = props.payload?.durationSeconds;
+                return [secs ? formatMinutes(secs / 60) : "—", label];
+              }}
             />
-            <Bar dataKey="acus" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="value" name={unit} radius={[4, 4, 0, 0]}>
               {data.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}

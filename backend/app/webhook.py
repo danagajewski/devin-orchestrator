@@ -9,8 +9,8 @@ from fastapi import APIRouter, Header, HTTPException, Request
 
 from app.config import settings
 from app.devin_client import create_session
-from app.models import OrchestratedSession, PullRequestInfo, SessionStatus
-from app.poller import close_issue_for_session
+from app.models import OrchestratedSession, SessionStatus
+from app.poller import _parse_devin_pr, close_issue_for_session
 from app.storage import get_all_sessions, save_session
 
 logger = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ async def github_webhook(
         devin_url = result.get("url", f"https://app.devin.ai/sessions/{session_id}")
 
         prs = [
-            PullRequestInfo(url=pr.get("url", ""), title=pr.get("title"), number=pr.get("number"))
+            _parse_devin_pr(pr)
             for pr in result.get("pull_requests", [])
         ]
 
