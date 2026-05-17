@@ -33,6 +33,10 @@ class OrchestratedSession(BaseModel):
     status: SessionStatus = SessionStatus.PENDING
     status_detail: str | None = None
     acus_consumed: float = 0.0
+    estimated_acus: float | None = None
+    num_user_messages: int | None = None
+    num_devin_messages: int | None = None
+    session_size: str | None = None
     created_at: float = Field(default_factory=time.time)
     completed_at: float | None = None
     duration_seconds: float | None = None
@@ -50,6 +54,8 @@ class MetricsResponse(BaseModel):
     success_rate: float = 0.0
     total_acus: float = 0.0
     avg_acus_per_session: float = 0.0
+    total_estimated_acus: float = 0.0
+    avg_estimated_acus: float = 0.0
     avg_resolution_seconds: float | None = None
 
 

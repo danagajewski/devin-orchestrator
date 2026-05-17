@@ -18,6 +18,10 @@ export interface OrchestratedSession {
   status: "pending" | "running" | "completed" | "failed" | "suspended" | "merged";
   status_detail: string | null;
   acus_consumed: number;
+  estimated_acus: number | null;
+  num_user_messages: number | null;
+  num_devin_messages: number | null;
+  session_size: string | null;
   created_at: number;
   completed_at: number | null;
   duration_seconds: number | null;
@@ -35,6 +39,8 @@ export interface Metrics {
   success_rate: number;
   total_acus: number;
   avg_acus_per_session: number;
+  total_estimated_acus: number;
+  avg_estimated_acus: number;
   avg_resolution_seconds: number | null;
 }
 

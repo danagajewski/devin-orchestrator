@@ -80,6 +80,8 @@ def compute_metrics() -> MetricsResponse:
     )
     failed = sum(1 for s in sessions if s.status == SessionStatus.FAILED)
     total_acus = sum(s.acus_consumed for s in sessions)
+    est_acus = [s.estimated_acus for s in sessions if s.estimated_acus is not None]
+    total_estimated = sum(est_acus)
 
     finished = completed + failed
     success_rate = (completed / finished * 100) if finished > 0 else 0.0
@@ -95,5 +97,7 @@ def compute_metrics() -> MetricsResponse:
         success_rate=round(success_rate, 1),
         total_acus=round(total_acus, 2),
         avg_acus_per_session=round(total_acus / total, 2) if total > 0 else 0.0,
+        total_estimated_acus=round(total_estimated, 2),
+        avg_estimated_acus=round(total_estimated / len(est_acus), 2) if est_acus else 0.0,
         avg_resolution_seconds=round(avg_resolution, 1) if avg_resolution else None,
     )

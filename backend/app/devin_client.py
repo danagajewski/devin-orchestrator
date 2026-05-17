@@ -59,6 +59,24 @@ async def get_session(session_id: str) -> dict:
     return response.json()
 
 
+async def get_session_insights(session_id: str) -> dict | None:
+    """Fetch session insights (message counts, session size).
+
+    Returns None if the endpoint is unavailable or errors out,
+    so that polling can continue without breaking.
+    """
+    client = _get_client()
+    try:
+        response = await client.get(
+            f"/organizations/{settings.devin_org_id}/sessions/devin-{session_id}/insights",
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        logger.debug("Could not fetch insights for session %s", session_id)
+        return None
+
+
 async def close_client() -> None:
     global _client
     if _client and not _client.is_closed:

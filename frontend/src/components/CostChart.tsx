@@ -50,29 +50,56 @@ export default function CostChart({ sessions }: CostChartProps) {
     );
   }
 
-  const hasAcus = sessions.some((s) => s.acus_consumed > 0);
+  const hasRealAcus = sessions.some((s) => s.acus_consumed > 0);
+  const hasEstimatedAcus = sessions.some((s) => (s.estimated_acus ?? 0) > 0);
+  const hasAcus = hasRealAcus || hasEstimatedAcus;
 
   const data = sessions
     .slice(0, 20)
     .reverse()
-    .map((s) => ({
-      name: `#${s.github_issue_number}`,
-      value: hasAcus
-        ? Number(s.acus_consumed.toFixed(2))
-        : Number(((s.duration_seconds ?? 0) / 60).toFixed(1)),
-      status: s.status,
-      durationSeconds: s.duration_seconds,
-    }));
+    .map((s) => {
+      let value: number;
+      if (hasRealAcus) {
+        value = Number(s.acus_consumed.toFixed(2));
+      } else if (hasEstimatedAcus) {
+        value = Number((s.estimated_acus ?? 0).toFixed(2));
+      } else {
+        value = Number(((s.duration_seconds ?? 0) / 60).toFixed(1));
+      }
+      return {
+        name: `#${s.github_issue_number}`,
+        value,
+        status: s.status,
+        durationSeconds: s.duration_seconds,
+        estimatedAcus: s.estimated_acus,
+        devinMessages: s.num_devin_messages,
+        sessionSize: s.session_size,
+      };
+    });
 
-  const label = hasAcus ? "ACU Cost" : "Duration";
+  const label = hasRealAcus
+    ? "ACU Cost"
+    : hasEstimatedAcus
+      ? "Est. ACUs"
+      : "Duration";
   const unit = hasAcus ? "ACUs" : "min";
+  const titleText = hasRealAcus
+    ? "ACU Cost per Session (last 20)"
+    : hasEstimatedAcus
+      ? "Est. ACU Cost per Session (last 20)"
+      : "Session Duration (last 20)";
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-sm font-medium">
-          {hasAcus ? "ACU Cost" : "Session Duration"} per Session (last 20)
+          {titleText}
         </CardTitle>
+        {hasEstimatedAcus && !hasRealAcus && (
+          <p className="text-xs text-muted-foreground">
+            Based on message count &amp; session size
+          </p>
+        )}
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={240}>
@@ -97,9 +124,31 @@ export default function CostChart({ sessions }: CostChartProps) {
                 borderRadius: "8px",
                 fontSize: "12px",
               }}
-              formatter={(value: number, _name: string, props: { payload?: { durationSeconds?: number | null } }) => {
-                if (hasAcus) return [`${value} ACUs`, "Cost"];
-                const secs = props.payload?.durationSeconds;
+              formatter={(
+                value: number,
+                _name: string,
+                props: {
+                  payload?: {
+                    durationSeconds?: number | null;
+                    estimatedAcus?: number | null;
+                    devinMessages?: number | null;
+                    sessionSize?: string | null;
+                  };
+                },
+              ) => {
+                const p = props.payload;
+                if (hasRealAcus) return [`${value} ACUs`, "Cost"];
+                if (hasEstimatedAcus) {
+                  const details = [
+                    `~${value} ACUs`,
+                    p?.devinMessages != null ? `${p.devinMessages} msgs` : null,
+                    p?.sessionSize ? `size: ${p.sessionSize}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+                  return [details, label];
+                }
+                const secs = p?.durationSeconds;
                 return [secs ? formatMinutes(secs / 60) : "—", label];
               }}
             />

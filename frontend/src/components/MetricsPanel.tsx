@@ -58,9 +58,19 @@ export default function MetricsPanel({ metrics, loading }: MetricsPanelProps) {
       color: metrics.success_rate >= 80 ? "text-green-500" : "text-red-500",
     },
     {
-      title: "Total ACUs",
-      value: metrics.total_acus.toFixed(1),
-      subtitle: `~${metrics.avg_acus_per_session.toFixed(1)} avg per session`,
+      title: metrics.total_acus > 0 ? "Total ACUs" : "Est. ACUs",
+      value:
+        metrics.total_acus > 0
+          ? metrics.total_acus.toFixed(1)
+          : metrics.total_estimated_acus > 0
+            ? `~${metrics.total_estimated_acus.toFixed(1)}`
+            : "—",
+      subtitle:
+        metrics.total_acus > 0
+          ? `~${metrics.avg_acus_per_session.toFixed(1)} avg per session`
+          : metrics.total_estimated_acus > 0
+            ? `~${metrics.avg_estimated_acus.toFixed(1)} avg per session`
+            : "awaiting data",
       icon: DollarSign,
       color: "text-amber-500",
     },
