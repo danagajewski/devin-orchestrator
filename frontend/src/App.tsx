@@ -105,9 +105,9 @@ export default function App() {
           <ActivityFeed sessions={sessions} />
         </div>
 
-        <div>
-          <Tabs value={filter} onValueChange={setFilter}>
-            <div className="flex items-center justify-between mb-4">
+        <Tabs value={filter} onValueChange={setFilter}>
+          <div className="rounded-md border">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
               <h2 className="text-lg font-semibold">Sessions</h2>
               <TabsList>
                 <TabsTrigger value="all">All</TabsTrigger>
@@ -123,8 +123,8 @@ export default function App() {
                 filter={filter}
               />
             </TabsContent>
-          </Tabs>
-        </div>
+          </div>
+        </Tabs>
       </main>
 
       <footer className="border-t mt-8 py-4">
