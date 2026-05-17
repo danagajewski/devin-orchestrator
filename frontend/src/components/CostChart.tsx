@@ -97,9 +97,9 @@ export default function CostChart({ sessions }: CostChartProps) {
                 borderRadius: "8px",
                 fontSize: "12px",
               }}
-              formatter={(value: number, _name: string, props: { payload: { durationSeconds: number | null } }) => {
+              formatter={(value: number, _name: string, props: { payload?: { durationSeconds?: number | null } }) => {
                 if (hasAcus) return [`${value} ACUs`, "Cost"];
-                const secs = props.payload.durationSeconds;
+                const secs = props.payload?.durationSeconds;
                 return [secs ? formatMinutes(secs / 60) : "—", label];
               }}
             />
