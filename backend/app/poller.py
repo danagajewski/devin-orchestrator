@@ -239,6 +239,38 @@ async def _poll_once() -> None:
             logger.exception("Error polling session %s", session.session_id)
 
 
+async def _backfill_insights() -> None:
+    """Fetch insights for sessions that completed without insights data."""
+    all_sessions = get_all_sessions()
+    missing = [
+        s for s in all_sessions
+        if s.estimated_acus is None and s.status not in (SessionStatus.PENDING,)
+    ]
+    if not missing:
+        return
+
+    logger.debug("Backfilling insights for %d sessions", len(missing))
+    for session in missing:
+        try:
+            insights = await get_session_insights(session.session_id)
+            if insights:
+                session.num_user_messages = insights.get("num_user_messages")
+                session.num_devin_messages = insights.get("num_devin_messages")
+                session.session_size = insights.get("session_size")
+                session.estimated_acus = _estimate_acus(
+                    session.num_devin_messages,
+                    session.session_size,
+                )
+                save_session(session)
+                logger.info(
+                    "Backfilled insights for session %s: est_acus=%s",
+                    session.session_id,
+                    session.estimated_acus,
+                )
+        except Exception:
+            logger.exception("Error backfilling insights for session %s", session.session_id)
+
+
 async def _check_merges_once() -> None:
     """Check for PR merges on sessions that have PRs but haven't had their issues closed."""
     all_sessions = get_all_sessions()
@@ -275,6 +307,7 @@ async def _poll_loop() -> None:
     while True:
         try:
             await _poll_once()
+            await _backfill_insights()
             await _check_merges_once()
         except Exception:
             logger.exception("Unexpected error in poll loop")
