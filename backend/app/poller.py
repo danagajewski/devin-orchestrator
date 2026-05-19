@@ -109,9 +109,11 @@ def _should_auto_merge(session) -> tuple[bool, str]:
         return False, "session was suspended"
 
     max_size = settings.auto_merge_max_size
-    session_size = session.session_size or "xs"
+    session_size = session.session_size
+    if not session_size:
+        return False, "session size unknown — requesting review for safety"
     max_idx = _SIZE_ORDER.index(max_size) if max_size in _SIZE_ORDER else 1
-    cur_idx = _SIZE_ORDER.index(session_size) if session_size in _SIZE_ORDER else 0
+    cur_idx = _SIZE_ORDER.index(session_size) if session_size in _SIZE_ORDER else len(_SIZE_ORDER)
     if cur_idx > max_idx:
         return False, f"session size '{session_size}' exceeds max '{max_size}'"
 
