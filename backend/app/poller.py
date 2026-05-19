@@ -102,6 +102,11 @@ def _should_auto_merge(session) -> tuple[bool, str]:
     if not settings.auto_merge_enabled:
         return False, "auto-merge disabled in config"
 
+    # Label-based override: issues tagged "needs-review" always get human review
+    review_labels = {"needs-review", "needs review", "manual-review"}
+    if review_labels & {lbl.lower() for lbl in session.github_issue_labels}:
+        return False, "issue has a review-required label"
+
     if session.status == SessionStatus.FAILED:
         return False, "session failed"
 
@@ -109,9 +114,11 @@ def _should_auto_merge(session) -> tuple[bool, str]:
         return False, "session was suspended"
 
     max_size = settings.auto_merge_max_size
-    session_size = session.session_size or "xs"
+    session_size = session.session_size
+    if not session_size:
+        return False, "session size unknown — requesting review for safety"
     max_idx = _SIZE_ORDER.index(max_size) if max_size in _SIZE_ORDER else 1
-    cur_idx = _SIZE_ORDER.index(session_size) if session_size in _SIZE_ORDER else 0
+    cur_idx = _SIZE_ORDER.index(session_size) if session_size in _SIZE_ORDER else len(_SIZE_ORDER)
     if cur_idx > max_idx:
         return False, f"session size '{session_size}' exceeds max '{max_size}'"
 
