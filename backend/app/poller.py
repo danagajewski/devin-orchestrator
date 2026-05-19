@@ -102,6 +102,11 @@ def _should_auto_merge(session) -> tuple[bool, str]:
     if not settings.auto_merge_enabled:
         return False, "auto-merge disabled in config"
 
+    # Label-based override: issues tagged "needs-review" always get human review
+    review_labels = {"needs-review", "needs review", "manual-review"}
+    if review_labels & {lbl.lower() for lbl in session.github_issue_labels}:
+        return False, "issue has a review-required label"
+
     if session.status == SessionStatus.FAILED:
         return False, "session failed"
 
